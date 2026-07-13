@@ -1,0 +1,9 @@
+cols = ['Posting Date','Customer','Customer Name', 'Customer Group','Material','Material Description', 'QTY']
+dtypes:
+Posting Date            datetime64[us]
+Customer                           str
+Customer Name                      str
+Customer Group                     str
+Material                           str
+Material Description               str
+QTY                              int64
