@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 from openpyxl.drawing.image import Image
 import io
 
-# Configure the browser tab title and visual layout
+# 1. Configure the browser tab title and visual layout
 st.set_page_config(page_title="Material Volume Analyzer", page_icon="📊", layout="wide")
 
 st.title("📊 Material Volume Share Analyzer & Chart Generator")
 st.markdown(
     "Upload your raw data Excel file. The system will automatically aggregate data, generate a collision-free stacked bar chart, and output an engineered Excel summary.")
 
-# 1. Drag-and-Drop File Uploader Component
+# 2. Drag-and-Drop File Uploader Component
 uploaded_file = st.file_uploader("Upload your raw data Excel file (.xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
@@ -29,7 +29,7 @@ if uploaded_file is not None:
             st.error(
                 f"The Excel file is missing required headers: {missing_cols}. Please fix your spreadsheet and try again.")
         else:
-            # --- 2. [CORE DATA RESTRUCTURING LOGIC] ---
+            # --- 3. [CORE DATA RESTRUCTURING LOGIC] ---
             group_counts = df.groupby('Material')['Customer Group'].nunique()
             target_materials = group_counts[group_counts > 1].index.tolist()
             filtered_df = df[df['Material'].isin(target_materials)].copy()
@@ -58,8 +58,12 @@ if uploaded_file is not None:
                     grouped_rows.append(row_dict)
 
                 total_qty_row = {
-                    'Material': f"Total for {mat}", 'Material Description': '', 'Customer Name': '',
-                    'Customer Group': '', 'QTY': mat_df['Global_QTY'].iloc[0], 'Total Customers for Material': ''
+                    'Material': f"Total for {mat}",
+                    'Material Description': '',
+                    'Customer Name': '',
+                    'Customer Group': '',
+                    'QTY': mat_df['Global_QTY'].iloc[0],
+                    'Total Customers for Material': ''
                 }
                 grouped_rows.append(total_qty_row)
                 grouped_rows.append({col: '' for col in output_cols})
@@ -70,7 +74,7 @@ if uploaded_file is not None:
             plot_data = plot_data_raw.reindex(sorted_target_materials)
             material_totals = plot_data.sum(axis=1)
 
-            # --- 3. [CHART GENERATION ENGINE WITH OPTIMIZATIONS] ---
+            # --- 4. [CHART GENERATION ENGINE WITH OPTIMIZATIONS] ---
             fig, ax = plt.subplots(figsize=(17, 10))
             customer_groups = plot_data.columns.tolist()
             num_groups = len(customer_groups)
@@ -110,11 +114,11 @@ if uploaded_file is not None:
                     for idx_l in range(1, len(material_labels)):
                         diff = material_labels[idx_l]['current_y'] - material_labels[idx_l - 1]['current_y']
                         if diff < min_vertical_clearance: material_labels[idx_l]['current_y'] += (
-                                    min_vertical_clearance - diff)
+                                min_vertical_clearance - diff)
                     for idx_l in range(len(material_labels) - 2, -1, -1):
                         diff = material_labels[idx_l + 1]['current_y'] - material_labels[idx_l]['current_y']
                         if diff < min_vertical_clearance: material_labels[idx_l]['current_y'] -= (
-                                    min_vertical_clearance - diff)
+                                min_vertical_clearance - diff)
 
                 for lbl in material_labels:
                     final_y = max(lbl['current_y'], 5)
@@ -129,13 +133,18 @@ if uploaded_file is not None:
 
             ax.set_title("Material Volume Share by Customer Group", fontsize=14, weight='bold', pad=25)
             ax.set_ylabel("Quantity (QTY)", fontsize=11, weight='bold')
-            ax.set_xlabel("Material Description", fontsize=11, weight='bold', labelpad=15)
+            ax.set_xlabel("Material Summary Description", fontsize=11, weight='bold', labelpad=15)
 
-            # Restored and safe ticker assignment
+            # Safe ticker assignment
             x_tick_labels = [f"{final_df[final_df['Material'] == mat]['Material Description'].iloc[0]}" for mat in
                              sorted_target_materials]
             ax.set_xticks(x_indexes)
             ax.set_xticklabels(x_tick_labels, fontsize=9, weight='bold', rotation=45, ha='right')
+
+            # [UPDATED FIX]: 使用 tight_layout 动态优化边距，配合 subplots_adjust 补充底部空间，防截断
+            plt.tight_layout()
+            plt.subplots_adjust(bottom=0.32)
+
             ax.set_xlim(-0.5, len(sorted_target_materials) + 1.1)
             ax.set_ylim(0, max(material_totals) * 1.18)
 
@@ -145,43 +154,38 @@ if uploaded_file is not None:
                       loc='upper right', labelspacing=1.2, handletextpad=0.8, borderpad=1.0, framealpha=1.0,
                       edgecolor='#333333')
 
-            # --- 4. DISPLAY RUNTIME WEB REVIEWS ---
-            st.subheader("📈 Live Visual Analytics Preview")
+            # --- 5. [STREAMLIT DISPLAY & DOWNLOAD WORKFLOW] ---
+            # 在网页端渲染图表
+            st.header("📊 Generated Visualization")
             st.pyplot(fig)
 
-            # --- 5. STREAM EXCEL EXPORTS OUT OF IN-MEMORY STRING BUFFERS ---
-            img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png', dpi=130)
-            img_buffer.seek(0)
-            plt.close()
+            # 内存处理：将图表和数据保存为可供用户下载的 Excel 汇总表格
+            st.header("💾 Download Summary Report")
 
-            excel_buffer = io.BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                spaced_df.to_excel(writer, sheet_name='Data Summary', index=False)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                spaced_df.to_excel(writer, sheet_name='Summary Data', index=False)
+
+                # 将图表作为图片插入到 Excel 的指定位置
+                img_buf = io.BytesIO()
+                fig.savefig(img_buf, format='png', dpi=150)
+                img_buf.seek(0)
+
                 workbook = writer.book
-                ws_charts = workbook.create_sheet(title='Visual Charts')
-                img = Image(img_buffer)
-                ws_charts.add_image(img, 'A1')
-            excel_buffer.seek(0)
+                worksheet = writer.sheets['Summary Data']
+                xl_img = Image(img_buf)
 
-            # --- 6. RENDER INTERACTIVE INTERFACE DOWNLOAD BUTTONS ---
-            st.subheader("📥 Export Final Assets")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="Download Final Structured Excel Report",
-                    data=excel_buffer,
-                    file_name="final_narrow_bars_report.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            with col2:
-                img_buffer.seek(0)
-                st.download_button(
-                    label="Download Chart Graphic File (PNG)",
-                    data=img_buffer,
-                    file_name="narrow_bars_stacked_bar_chart.png",
-                    mime="image/png"
-                )
+                # 在第 H 列，第 2 行开始插入柱状图图片
+                worksheet.add_image(xl_img, 'H2')
+
+            processed_data = output.getvalue()
+
+            st.download_button(
+                label="📥 Download Engineered Excel Summary",
+                data=processed_data,
+                file_name="material_volume_summary.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     except Exception as e:
-        st.error(f"An unexpected data layout mismatch occurred: {str(e)}")
+        st.error(f"An unexpected error occurred during execution: {e}")
