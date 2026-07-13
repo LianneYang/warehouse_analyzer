@@ -133,7 +133,7 @@ if uploaded_file is not None:
 
             ax.set_title("Material Volume Share by Customer Group", fontsize=14, weight='bold', pad=25)
             ax.set_ylabel("Quantity (QTY)", fontsize=11, weight='bold')
-            ax.set_xlabel("Material Summary Description", fontsize=11, weight='bold', labelpad=15)
+            ax.set_xlabel("Material Description", fontsize=11, weight='bold', labelpad=15)
 
             # Safe ticker assignment
             x_tick_labels = [f"{final_df[final_df['Material'] == mat]['Material Description'].iloc[0]}" for mat in
